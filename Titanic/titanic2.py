@@ -1,7 +1,21 @@
 from sklearn import preprocessing
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.svm import SVC
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import AdaBoostClassifier
+
 from sklearn.metrics import accuracy_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
+from sklearn.metrics import matthews_corrcoef
+
+try:
+    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import KFold
+except:
+    from sklearn.cross_validation import train_test_split
+    from sklearn.cross_validation import KFold
+
 from sklearn.preprocessing import Imputer
 
 import pandas as pd
@@ -9,45 +23,6 @@ import pandas as pd
 import csv
 import numpy as np
 import matplotlib.pyplot as plt
-
-
-def __read_csv_file(file_name, delimiter=",", skip_header=True):
-    data = []
-    with open(file_name, "r") as csvfile:
-        reader = csv.reader(csvfile, delimiter=delimiter)
-        if skip_header:
-            next(reader)
-        map(lambda l: data.append(l), reader)
-
-    data = np.array(data)
-    return data
-
-
-def read_train_data(encode_label_index=None):
-    train = __read_csv_file("train.csv")
-    if encode_label_index is None:
-        encode_label_index = xrange(len(train[0]))
-
-    label_encoder = preprocessing.LabelEncoder()
-
-    print("before label:", train[0])
-    for column in encode_label_index:
-        train[:, column] = label_encoder.fit_transform(train[:, column])
-    print("after label:", train[0])
-
-    # imputer = Imputer(missing_values='',strategy='mean', axis=0)
-
-    result = []
-    map(lambda l: result.append(l[1]), train)
-    train = np.delete(train, [1, 8], axis=1)
-    return train, result
-
-
-def read_test_data():
-    test_data = __read_csv_file("test.csv")
-    test_result = __read_csv_file("gender_submission.csv")
-    test_result = np.delete(test_result, [0], axis=1)
-    return test_data, test_result
 
 
 def save_result(test_data, predict):
@@ -93,47 +68,38 @@ def predict():
         train_data.ix[:, column] = label_encoder.fit_transform(train_data.ix[:, column])
         # print(label_encoder.classes_)
 
-
     train_data_after_label_transform = train_data
     train_result_after_label_transform = train_result
 
-    from sklearn.model_selection import KFold
-
-    k_fold = KFold(5)
+    k_fold = KFold(train_data_after_label_transform.shape[0], n_folds=5, shuffle=True)
 
     machine = RandomForestClassifier()
+    # machine = DecisionTreeClassifier()
+    # machine = AdaBoostClassifier()
+    # machine = GaussianNB()
+    # machine = SVC(kernel="rbf")
     for train_index, test_index in k_fold:
-        print(train_index, test_index)
         train_data = train_data_after_label_transform.iloc[train_index, :]
-        train_result = train_result_after_label_transform.iloc[train_index, :]
+        train_result = train_result_after_label_transform.iloc[train_index]
 
         test_data = train_data_after_label_transform.iloc[test_index, :]
-        test_result = train_result_after_label_transform.iloc[test_index, :]
+        test_result = train_result_after_label_transform.iloc[test_index]
         machine.fit(train_data, train_result)
         train_accuracy = accuracy_score(train_result, machine.predict(train_data))
         test_predict = machine.predict(test_data)
         test_accuracy = accuracy_score(test_result, test_predict)
+        print("score on train data:", train_accuracy)
+        print("score on test data:", test_accuracy)
 
-    # train_data, test_data, train_result, test_result = train_test_split(train_data, train_result, test_size=0.25)
-    #
-    # # show(train_data, train_result, "Age", "Fare")
-    #
-    #
-    #
-    # # print(train_data.head(10))
-    # # print(test_data.head(10))
-    #
-    # machine.fit(train_data, train_result)
-    #
-    # train_accuracy = accuracy_score(train_result, machine.predict(train_data))
-    print("score on train data:", train_accuracy)
-    print("score on test data:", test_accuracy)
+    print("mcc:", matthews_corrcoef(test_result, test_predict))
+    print("report:", classification_report(test_result, test_predict))
 
     return train_accuracy, test_accuracy
 
+
 def main():
 
-    for num in xrange(10):
+    for num in range(1):
         predict()
     # print(test_data)
     # save_result(test_data, test_predict)
