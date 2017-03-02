@@ -15,15 +15,20 @@ from sklearn.neighbors.nearest_centroid import NearestCentroid
 from sklearn.neighbors import KNeighborsClassifier
 
 
+
 try:
+    from sklearn.model_selection import GridSearchCV
     from sklearn.model_selection import train_test_split
+
 except:
     from sklearn.cross_validation import train_test_split
+    from sklearn.cross_validation import GridSearchCV
 
 
 import pandas as pd
 import matplotlib.pyplot as plt
 
+from xgboost import XGBClassifier
 
 def show(train_data, train_result, feature_x_name, feature_y_name):
     survived = train_data[train_result["Survived"] == 1]
@@ -60,16 +65,11 @@ def get_number(x):
     return int(result)
 
 
-def pre_process_data(origin_data):
-    data = origin_data.groupby(origin_data["Pclass"]).apply(lambda d: d.fillna(d["Fare"].mean()))
-
+def pre_process_data(data):
     data["FirstName"] = data.Name.apply(lambda n: n.split(",")[0].strip())
     data["Temp"] = data.Name.apply(lambda n: n.split(",")[1])
     data["Title"] = data.Temp.apply(lambda n: n.split(".")[0].strip())
 
-    data['Title'] = data['Title'].replace(
-        ['Lady', 'Countess', 'Capt', 'Col', 'Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona', 'the Countess'],
-        'Other')
     data['Title'] = data['Title'].replace('Mlle', 'Miss')
     data['Title'] = data['Title'].replace('Ms', 'Miss')
     data['Title'] = data['Title'].replace('Mme', 'Mrs')
@@ -82,52 +82,81 @@ def pre_process_data(origin_data):
     data["CabinNumber"] = data['Cabin'].apply(lambda x: get_number(str(x)))
 
     data["Ticket"] = data['Ticket'].apply(lambda x: get_number(str(x)))
+    return data
 
+def fillna_data(data):
+    # all_data = train.append(test)
+    data = data.groupby(data["Pclass"]).apply(lambda d: d.fillna(d["Fare"].mean()))
+    data = data.groupby(data["Title"]).apply(lambda d: d.fillna(d["Age"].mean()))
+
+    return data
+
+def post_process_data(data):
     data["Embarked"] = data["Embarked"].factorize()[0]
-
     data.loc[data['FarmilySize'] >= 4, 'FarmilySize'] = 4
 
-    #
+    data['Title'] = data['Title'].replace(
+        ['Lady', 'Countess', 'Capt', 'Col', 'Don', 'Dr', 'Major', 'Rev', 'Sir', 'Jonkheer', 'Dona', 'the Countess'],
+        'Other')
+
+    # data['AgeRegion'] = pd.cut(data['Age'], 5)
+    # data.loc[ data['Age'] <= 16, 'Age'] = 0
+    # data.loc[(data['Age'] > 16) & (data['Age'] <= 32), 'Age'] = 1
+    # data.loc[(data['Age'] > 32) & (data['Age'] <= 48), 'Age'] = 2
+    # data.loc[(data['Age'] > 48) & (data['Age'] <= 64), 'Age'] = 3
+    # data.loc[data['Age'] > 64, 'Age'] = 4
+
     data = data.drop(["Cabin"], axis=1)
     data = data.drop("Temp", axis=1)
     # data = data.drop(["Name", "SibSp", "Parch", "FarmilyName", "FirstName", "CabinNumber"], axis=1)
-    data = data.drop(["Name", "SibSp", "Parch", "FarmilyName", "FirstName"], axis=1)
+    data = data.drop(["Name", "SibSp", "Parch", "FarmilyName", "FirstName", "Age", "Ticket", "Embarked", "CabinLetter", "CabinNumber", "FarmilySize"], axis=1)
     return data
 
 
 def predict():
     origin_data = pd.read_csv("train.csv")
+
     print("origin_data shape:", origin_data.shape)
     train_data = pre_process_data(origin_data)
+
+    test_data = pd.read_csv("test.csv")
+    test_data = pre_process_data(test_data)
+
+    train_data = fillna_data(train_data)
+    test_data = fillna_data(test_data)
+
     train_data = train_data.dropna()
     train_result = train_data.Survived
     train_data = train_data.drop(["Survived", "PassengerId"], axis=1)
 
-    test_data = pd.read_csv("test.csv")
-    test_data = pre_process_data(test_data)
-    test_data["Age"].fillna(test_data["Age"].mean(), inplace=True)
+    train_data = post_process_data(train_data)
+    test_data = post_process_data(test_data)
+
+    # test_data["Age"].fillna(test_data["Age"].mean(), inplace=True)
     test_data = test_data.drop(["PassengerId"], axis=1)
+
 
     print("shape:", train_data.shape, test_data.shape)
     print("column", train_data.columns)
 
     for y in train_data.columns:
-        if train_data[y].dtype != "object":
+        if str(train_data[y].dtype) != "object":
             continue
-
-        print(y, train_data[y].dtype)
 
         label_encoder = preprocessing.LabelEncoder()
         column = train_data.columns.get_loc(y)
 
         label_transform_data = train_data.ix[:, column].append(test_data.ix[:, column])
         label_encoder.fit(label_transform_data)
+        print(y, label_encoder.classes_)
         train_data.ix[:, column] = label_encoder.transform(train_data.ix[:, column])
         test_data.ix[:, column] = label_encoder.transform(test_data.ix[:, column])
 
+    train_result_last = pd.DataFrame(train_result)
+    # show(train_data, train_result_last, "Age", "Title")
 
     train_data_last = train_data
-    train_result_last = pd.DataFrame(train_result)
+
     print(train_data_last.head(10))
     # show(train_data_last, train_result_last, "Embarked", "Fare")
 
@@ -145,33 +174,82 @@ def predict():
     from sklearn.linear_model import LogisticRegression
     estimators = [ensemble.RandomForestClassifier(),
                   DecisionTreeClassifier(),
-                  ensemble.AdaBoostClassifier(),
+                  ensemble.AdaBoostClassifier(n_estimators=70, learning_rate=1.5),
+                  # ensemble.AdaBoostClassifier(GaussianNB()),
                   GaussianNB(),
                   SVC(),
                   SGDClassifier(loss="hinge"),
                   NearestCentroid(),
                   ensemble.BaggingClassifier(KNeighborsClassifier(), max_samples=0.5, max_features=0.5),
                   ensemble.GradientBoostingClassifier(),
-                  KNeighborsClassifier(3),
+                  KNeighborsClassifier(10,p=1, weights="distance",  n_jobs=8, algorithm="ball_tree", leaf_size=30),
+                  XGBClassifier()
                   ]
 
-    estimator_name = "RandomForestClassifier"
+    estimator_name = "GradientBoostingClassifier"
     estimator = list(filter(lambda e: type(e).__name__ == estimator_name, estimators))[0]
 
-    tuned_parameters = [{'min_samples_split': [2, 3, 4, 5, 6, 7, 8, 9]}]
-    print("before estimate train data size:", train_data_last.shape)
-    cross_val_score_for_all_estimators(train_data_last, train_result_last, estimators)
-    # test_estimator(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize=False)
+    # tuned_parameters = [{"criterion": ["gini", "entropy"], "min_samples_leaf": [1, 5, 10], "min_samples_split": [2, 4, 10, 12, 16],     "n_estimators": [50, 100, 400, 700, 1000]}]
 
-    print(train_data_last.head(10))
+    # Adaboost
+    # tuned_parameters = [ { "n_estimators": [40, 50, 60, 70],
+    #              "learning_rate": [1.5]}]
+
+    #GBC
+    # tuned_parameters = [{"loss": ['deviance', "exponential"], "learning_rate": [0.1, 1, 10], "n_estimators": [10, 100, 1000],
+    #              "subsample": [1.0, 0.5, 0.25, 0.75], "criterion": ['friedman_mse', "mse", "mae"], "min_samples_split": [2, 5, 10, 0.05, 0.1, 0.2, 0.3],
+    #              "min_samples_leaf": [1,2, 5, 10, 0.05, 0.1, 0.2, 0.3], "min_weight_fraction_leaf": [0, 0.05, 0.1, 0.2, 0.3],
+    #              "max_depth": [1, 3, 10, 100], "min_impurity_split": [1e-7], "max_features": [1,2,3,4],
+    #              "max_leaf_nodes": [None, 10, 100]}]
+
+    tuned_parameters = [{
+                        "loss": ['deviance', "exponential"],
+                         "learning_rate": [1, 2],
+                         "n_estimators": [10, 100],
+                         "subsample": [1.0, 0.5, 0.25, 0.75],
+                         # "criterion": ['friedman_mse', "mse", "mae"]
+                         }]
+
+    # KNeig
+    # tuned_parameters = [{ "n_neighbors": [2,3,4,5,10,50], "weights":['uniform', "distance"],  "algorithm": ['auto', "ball_tree", "kd_tree", "brute"],
+    #                       "leaf_size": [30],
+    #                       "p": [1, 2],  "metric": ['minkowski'], "metric_params": [None],  "n_jobs": [1, 4]}]
+    # tuned_parameters = [{ "n_neighbors": [2,3,5,10], "weights":['uniform', "distance"],  "algorithm": ["ball_tree", "kd_tree", "brute"],
+    #                       "leaf_size": [30],
+    #                       "p": [1, 2],   "n_jobs": [8]}]
+
+    # svc
+    # tuned_parameters = [{ "C": [1.0], "kernel": ['rbf'], "degree": [3], "gamma": ['auto'],
+    #                       "coef0": [0.0], "shrinking": [True], "probability": [False], "tol": [1e-3], "cache_size": [200], "class_weight": [None],
+    #                       "verbose": [False], "max_iter": [-1]}]
+
+    # tuned_parameters = [{"kernel"}]
+    print("before estimate train data size:", train_data_last.shape)
+    # cross_val_score_for_all_estimators(train_data_last, train_result_last, estimators)
+    test_estimator(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize=True)
+
+    print(train_data_last.head(2))
+
+    # eclf1 = ensemble.VotingClassifier(estimators=[('RandomForestClassifier', ensemble.RandomForestClassifier()),
+    #                                               ('AdaBoostClassifier', ensemble.AdaBoostClassifier()),
+    #                                               ('GradientBoostingClassifier', ensemble.GradientBoostingClassifier()),
+    #                                               ("GaussianNB", GaussianNB()),
+    #                                               ("SVC", SVC())
+    #                                               # ("BaggingClassifier", ensemble.BaggingClassifier(KNeighborsClassifier(), max_samples=0.5, max_features=0.5))
+    #                                             ],
+    #                                   voting='hard')
+    # train_predict = eclf1.fit(train_data_last, train_result_last["Survived"]).predict(train_data_last)
+    # test_predict = eclf1.predict(test_data_after_transform)
+
     estimator.fit(train_data_last, train_result_last["Survived"])
     train_predict = estimator.predict(train_data_last)
+    test_predict = estimator.predict(test_data_after_transform)
+
     print("")
     print("accuracy:", metrics.accuracy_score(train_result_last, train_predict))
     print("mcc:", metrics.matthews_corrcoef(train_result_last, train_predict))
-    print("remprt:", metrics.classification_report(train_result_last, train_predict))
-
-    test_predict = estimator.predict(test_data_after_transform)
+    print("remprt:")
+    print(metrics.classification_report(train_result_last, train_predict))
 
     df_result = pd.DataFrame(pd.read_csv("test.csv")["PassengerId"], columns=["PassengerId"])
     df_result["Survived"] = test_predict
@@ -182,19 +260,28 @@ def predict():
     df_result.to_csv("result.csv", index=False)
 
 
+def get_scores(estimator, x, y):
+    yPred = estimator.predict(x)
+
+    accuracy = metrics.accuracy_score(y, yPred)
+    precision = metrics.precision_score(y, yPred, pos_label=3, average='macro')
+    recall = metrics.recall_score(y, yPred, pos_label=3, average='macro')
+    print(accuracy, precision, recall)
+    return accuracy
+
 def cross_val_score_for_all_estimators(train_data, train_result, estimators):
     print("")
     for estimator in estimators:
-        result = cross_validation.cross_val_score(estimator, train_data, train_result["Survived"], cv=5)
+        result = cross_validation.cross_val_score(estimator, train_data, train_result["Survived"], cv=5, scoring=get_scores)
         print(type(estimator).__name__, result.mean())
 
 def test_estimator(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize):
-    results = cross_validation.cross_val_score(estimator, train_data_last, train_result_last["Survived"], cv=5)
-    print(results, results.mean())
+    # results = cross_validation.cross_val_score(estimator, train_data_last, train_result_last["Survived"], cv=5)
+    # print(results, results.mean())
 
     if not para_optimize:
         return
-    from sklearn.model_selection import GridSearchCV
+
     clf = GridSearchCV(estimator, tuned_parameters, cv=5, scoring='precision_macro')
     clf.fit(train_data_last, train_result_last["Survived"])
 
