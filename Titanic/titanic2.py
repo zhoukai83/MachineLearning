@@ -28,7 +28,7 @@ except:
 import pandas as pd
 import matplotlib.pyplot as plt
 
-from xgboost import XGBClassifier
+# from xgboost import XGBClassifier
 
 def show(train_data, train_result, feature_x_name, feature_y_name):
     survived = train_data[train_result["Survived"] == 1]
@@ -182,73 +182,44 @@ def predict():
                   NearestCentroid(),
                   ensemble.BaggingClassifier(KNeighborsClassifier(), max_samples=0.5, max_features=0.5),
                   ensemble.GradientBoostingClassifier(),
-                  KNeighborsClassifier(10,p=1, weights="distance",  n_jobs=8, algorithm="ball_tree", leaf_size=30),
-                  XGBClassifier()
+                  KNeighborsClassifier(10, p=1, weights="distance",  n_jobs=8, algorithm="ball_tree", leaf_size=30),
+                  # KNeighborsClassifier(),
+                  # XGBClassifier()
                   ]
 
-    estimator_name = "GradientBoostingClassifier"
+    estimator_name = "DecisionTreeClassifier"
     estimator = list(filter(lambda e: type(e).__name__ == estimator_name, estimators))[0]
 
-    # tuned_parameters = [{"criterion": ["gini", "entropy"], "min_samples_leaf": [1, 5, 10], "min_samples_split": [2, 4, 10, 12, 16],     "n_estimators": [50, 100, 400, 700, 1000]}]
+    results = cross_validation.cross_val_score(estimator, train_data_last, train_result_last["Survived"], cv=5)
+    print(results, results.mean())
 
-    # Adaboost
-    # tuned_parameters = [ { "n_estimators": [40, 50, 60, 70],
-    #              "learning_rate": [1.5]}]
+    tuned_parameters = get_tuned_parameter(estimator)
+    estimator_para_optimize(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize=True)
 
-    #GBC
-    # tuned_parameters = [{"loss": ['deviance', "exponential"], "learning_rate": [0.1, 1, 10], "n_estimators": [10, 100, 1000],
-    #              "subsample": [1.0, 0.5, 0.25, 0.75], "criterion": ['friedman_mse', "mse", "mae"], "min_samples_split": [2, 5, 10, 0.05, 0.1, 0.2, 0.3],
-    #              "min_samples_leaf": [1,2, 5, 10, 0.05, 0.1, 0.2, 0.3], "min_weight_fraction_leaf": [0, 0.05, 0.1, 0.2, 0.3],
-    #              "max_depth": [1, 3, 10, 100], "min_impurity_split": [1e-7], "max_features": [1,2,3,4],
-    #              "max_leaf_nodes": [None, 10, 100]}]
-
-    tuned_parameters = [{
-                        "loss": ['deviance', "exponential"],
-                         "learning_rate": [1, 2],
-                         "n_estimators": [10, 100],
-                         "subsample": [1.0, 0.5, 0.25, 0.75],
-                         # "criterion": ['friedman_mse', "mse", "mae"]
-                         }]
-
-    # KNeig
-    # tuned_parameters = [{ "n_neighbors": [2,3,4,5,10,50], "weights":['uniform', "distance"],  "algorithm": ['auto', "ball_tree", "kd_tree", "brute"],
-    #                       "leaf_size": [30],
-    #                       "p": [1, 2],  "metric": ['minkowski'], "metric_params": [None],  "n_jobs": [1, 4]}]
-    # tuned_parameters = [{ "n_neighbors": [2,3,5,10], "weights":['uniform', "distance"],  "algorithm": ["ball_tree", "kd_tree", "brute"],
-    #                       "leaf_size": [30],
-    #                       "p": [1, 2],   "n_jobs": [8]}]
-
-    # svc
-    # tuned_parameters = [{ "C": [1.0], "kernel": ['rbf'], "degree": [3], "gamma": ['auto'],
-    #                       "coef0": [0.0], "shrinking": [True], "probability": [False], "tol": [1e-3], "cache_size": [200], "class_weight": [None],
-    #                       "verbose": [False], "max_iter": [-1]}]
-
-    # tuned_parameters = [{"kernel"}]
-    print("before estimate train data size:", train_data_last.shape)
-    # cross_val_score_for_all_estimators(train_data_last, train_result_last, estimators)
-    test_estimator(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize=True)
-
-    print(train_data_last.head(2))
-
-    # eclf1 = ensemble.VotingClassifier(estimators=[('RandomForestClassifier', ensemble.RandomForestClassifier()),
-    #                                               ('AdaBoostClassifier', ensemble.AdaBoostClassifier()),
-    #                                               ('GradientBoostingClassifier', ensemble.GradientBoostingClassifier()),
-    #                                               ("GaussianNB", GaussianNB()),
-    #                                               ("SVC", SVC())
-    #                                               # ("BaggingClassifier", ensemble.BaggingClassifier(KNeighborsClassifier(), max_samples=0.5, max_features=0.5))
-    #                                             ],
-    #                                   voting='hard')
-    # train_predict = eclf1.fit(train_data_last, train_result_last["Survived"]).predict(train_data_last)
-    # test_predict = eclf1.predict(test_data_after_transform)
 
     estimator.fit(train_data_last, train_result_last["Survived"])
     train_predict = estimator.predict(train_data_last)
     test_predict = estimator.predict(test_data_after_transform)
 
+
+    # print("before estimate train data size:", train_data_last.shape)
+    # cross_val_score_for_all_estimators(train_data_last, train_result_last, estimators)
+    #
+    # print(train_data_last.head(2))
+    # eclf1 = ensemble.VotingClassifier(estimators=[
+    #     ('AdaBoostClassifier', ensemble.AdaBoostClassifier()),
+    #     ('RandomForestClassifier', ensemble.RandomForestClassifier()),
+    #     ('GradientBoostingClassifier', ensemble.GradientBoostingClassifier()),
+    #     # ("GaussianNB", GaussianNB()),
+    #     # ("SVC", SVC())
+    #     # ("BaggingClassifier", ensemble.BaggingClassifier(KNeighborsClassifier(), max_samples=0.5, max_features=0.5))
+    #     ], voting='hard')
+    # train_predict = eclf1.fit(train_data_last, train_result_last["Survived"]).predict(train_data_last)
+    # test_predict = eclf1.predict(test_data_after_transform)
+
     print("")
     print("accuracy:", metrics.accuracy_score(train_result_last, train_predict))
     print("mcc:", metrics.matthews_corrcoef(train_result_last, train_predict))
-    print("remprt:")
     print(metrics.classification_report(train_result_last, train_predict))
 
     df_result = pd.DataFrame(pd.read_csv("test.csv")["PassengerId"], columns=["PassengerId"])
@@ -259,6 +230,61 @@ def predict():
     print(df_result["Survived"].value_counts(normalize=True))
     df_result.to_csv("result.csv", index=False)
 
+
+def get_tuned_parameter(estimator):
+    estimator_parameter_map = {
+        "Adaboost": [{
+            "n_estimators": [40, 50, 60, 70],"learning_rate": [1.5]
+        }],
+
+        "GradientBoostingClassifier": [{
+         #    "loss": ['deviance', "exponential"], "learning_rate": [0.1, 1, 10], "n_estimators": [10, 100, 1000],
+         # "subsample": [1.0, 0.5, 0.25, 0.75], "criterion": ['friedman_mse', "mse", "mae"],
+         #
+         # "min_samples_leaf": [1, 2, 5, 10, 0.05, 0.1, 0.2, 0.3], "min_weight_fraction_leaf": [0, 0.05, 0.1, 0.2, 0.3],
+         # "max_depth": [1, 3, 10, 100], "min_impurity_split": [1e-7], "max_features": [1, 2, 3, 4],
+         # "max_leaf_nodes": [None, 10, 100]
+
+        "loss": ['deviance'],   #'deviance', "exponential"
+        "learning_rate": [0.05],
+        "n_estimators":[7, 8, 9],       #[ 8, 10, 12, 14],
+        "min_samples_split":[0.2, 0.25, 0.15],            #[2, 5, 10, 0.05, 0.1, 0.15, 0.2, 0.25],
+        # "subsample": [1.0, 0.9, 0.8, 0.75, 0.7],
+        # "criterion": ['friedman_mse', "mse", "mae"]
+        }],
+
+        "KNeighborsClassifier": [{
+            "n_neighbors": [2, 3, 5, 10], "weights": ['uniform', "distance"],
+            "algorithm": ["ball_tree", "kd_tree", "brute"],
+            "leaf_size": [30],
+            "p": [1, 2], "n_jobs": [8]
+        }],
+
+        "SVC": [{
+            "C": [1.0], "kernel": ['rbf'], "degree": [3], "gamma": ['auto'],
+            "coef0": [0.0], "shrinking": [True], "probability": [False], "tol": [1e-3],
+            "cache_size": [200], "class_weight": [None],
+            "verbose": [False], "max_iter": [-1]
+        }],
+
+        "RandomForestClassifier": [{
+            "criterion": ["gini", "entropy"], "min_samples_leaf": [1, 5, 10], "min_samples_split": [2, 4, 10, 12, 16],
+            "n_estimators": [50, 100, 400, 700, 1000]
+        }],
+
+        "DecisionTreeClassifier": [{
+            # "criterion":  ["gini", "entropy"],
+            # "max_depth": [10, 100, 500, 1000],
+            # "min_samples_leaf": [1, 5, 10],
+            # "min_samples_split": [2, 3, 4, 5, 10],
+            "min_weight_fraction_leaf":  [0.07, 0.072, 0.075, 0.077, 0.08],
+            "max_leaf_nodes": [10, 30, 40, 50, 60, 80],
+        }]
+    }
+
+
+    tuned_parameters = estimator_parameter_map[type(estimator).__name__]
+    return tuned_parameters
 
 def get_scores(estimator, x, y):
     yPred = estimator.predict(x)
@@ -275,7 +301,7 @@ def cross_val_score_for_all_estimators(train_data, train_result, estimators):
         result = cross_validation.cross_val_score(estimator, train_data, train_result["Survived"], cv=5, scoring=get_scores)
         print(type(estimator).__name__, result.mean())
 
-def test_estimator(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize):
+def estimator_para_optimize(estimator, train_data_last, train_result_last, tuned_parameters, para_optimize):
     # results = cross_validation.cross_val_score(estimator, train_data_last, train_result_last["Survived"], cv=5)
     # print(results, results.mean())
 
