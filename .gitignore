@@ -1,3 +1,13 @@
 .idea
+.ipynb_checkpoints/
 
-Titanic\result.csv
+Titanic/result.csv
+Titanic/*.csv
+Titanic/readme.txt
+Titanic/test.ipynb
+
+DeepLearning/notMNIST_large/
+DeepLearning/notMNIST_small/
+DeepLearning/notMNIST_large.tar.gz
+DeepLearning/notMNIST_small.tar.gz
+DeepLearning/notMNIST.pickle
